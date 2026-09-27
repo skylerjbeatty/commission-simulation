@@ -30,6 +30,11 @@ export interface Employee {
   track: Track;
   /** Weight used when a team pool is split with "custom" distribution. */
   teamWeight: number;
+  /**
+   * Sales manager. Only matters for plans with `managersPaidSeparately`: the manager's sales still
+   * count toward store totals, but the plan pays them nothing and they get no team pool share.
+   */
+  isManager?: boolean;
 }
 
 export interface StoreScenario {
@@ -58,6 +63,8 @@ export interface CommissionTier {
 
 export type CommissionBasis =
   | "personalRevenue"
+  /** Nothing on the first `excessThreshold` of personal sales; department rates on the portion above it. */
+  | "personalExcessByDepartment"
   | "personalGP"
   | "departmentRevenue"
   | "departmentGP"
@@ -70,6 +77,10 @@ export interface CommissionRule {
   style: CommissionStyle;
   flatRatePct: number;
   tiers: CommissionTier[];
+  /** personalExcessByDepartment only: personal sales at or below this earn no commission. */
+  excessThreshold?: number;
+  /** personalExcessByDepartment only: rate per department on the portion above the threshold. */
+  departmentRatesPct?: Record<Department, number>;
 }
 
 export interface BasePay {
@@ -169,6 +180,10 @@ export interface CompensationPlan {
   bonuses: Bonus[];
   team: TeamPlan;
   tracks: TrackPlan;
+  /** Managers (Employee.isManager) are excluded from this plan's pay and team pool split. */
+  managersPaidSeparately?: boolean;
+  /** Plain-language rules shown with the plan (thresholds, payroll timing, exclusions). */
+  policyNotes?: string[];
 }
 
 export interface EmployeeResult {
@@ -186,6 +201,8 @@ export interface EmployeeResult {
   total: number;
   /** Variable pay that depends on store (not individual) results. */
   storeLinkedPay: number;
+  /** Manager excluded from this plan (paid separately); all pay fields are 0. */
+  paidSeparately?: boolean;
 }
 
 export interface CompTotals {

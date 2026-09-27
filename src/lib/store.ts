@@ -73,13 +73,22 @@ export function normalizeState(s: AppState): AppState {
   const fresh = buildPresets();
   const current = fresh.find((p) => p.id === CURRENT_PLAN_ID)!;
   let plans = s.plans?.length ? s.plans.filter((p) => p.id !== CURRENT_PLAN_ID) : fresh.slice(1);
-  plans = [current, ...plans];
+  // Add any built-in preset introduced since this state was saved, without touching existing plans.
+  const have = new Set(plans.map((p) => p.id));
+  const added = fresh.slice(1).filter((p) => !have.has(p.id));
+  plans = [current, ...plans, ...added];
   const ids = new Set(plans.map((p) => p.id));
   const fallback = plans[1]?.id ?? CURRENT_PLAN_ID;
   const base = defaultState();
+  // Older saved data predates the manager flag: mark Adam as the sales manager once.
+  let employees = s.employees ?? base.employees;
+  if (!employees.some((e) => e.isManager !== undefined)) {
+    employees = employees.map((e) => ({ ...e, isManager: e.id === "emp_adam" || e.name.trim().toLowerCase() === "adam" }));
+  }
   return {
     ...base,
     ...s,
+    employees,
     plans,
     selectedPlanId: ids.has(s.selectedPlanId) ? s.selectedPlanId : fallback,
     annualPlanId: ids.has(s.annualPlanId) ? s.annualPlanId : fallback,

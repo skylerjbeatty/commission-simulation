@@ -6,6 +6,8 @@ import { applyStoreRevenue, currentStoreRevenue, setHeadcount } from "@/lib/acti
 import { MAX_SALESPEOPLE, MIN_SALESPEOPLE } from "@/lib/defaults";
 import { money } from "@/lib/format";
 import { personalSales } from "@/lib/engine";
+import type { CompensationPlan } from "@/lib/types";
+import { describePlanRules } from "@/lib/planRules";
 
 export function PlanSelect({
   value,
@@ -32,6 +34,25 @@ export function PlanSelect({
   );
 }
 
+/** Plain-language plan rules (thresholds, exclusions, payroll timing). */
+export function PlanRules({ plan }: { plan: CompensationPlan }) {
+  const notes = describePlanRules(plan);
+  if (!plan.policyNotes?.length && !plan.managersPaidSeparately && plan.commission.basis !== "personalExcessByDepartment") return null;
+  return (
+    <details className="mt-3 rounded-lg border border-stone-200 bg-stone-50 p-3 text-sm" open>
+      <summary className="cursor-pointer font-semibold text-stone-800 select-none">How this plan works</summary>
+      <ul className="mt-2 space-y-1.5 text-stone-700">
+        {notes.map((n, i) => (
+          <li key={i} className="flex gap-2">
+            <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-stone-400" />
+            <span>{n}</span>
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
 export default function StoreControls({ onEditPlan }: { onEditPlan: () => void }) {
   const { state, update, planById } = useApp();
   const plan = planById(state.selectedPlanId);
@@ -39,6 +60,7 @@ export default function StoreControls({ onEditPlan }: { onEditPlan: () => void }
   const sc = state.scenario;
   const setScenario = (patch: Partial<typeof sc>) => update((s) => ({ ...s, scenario: { ...s.scenario, ...patch } }));
   const n = state.employees.length;
+  const managers = state.employees.filter((e) => e.isManager).length;
 
   return (
     <section className="rounded-xl border border-stone-200 bg-white p-4 sm:p-5">
@@ -57,6 +79,7 @@ export default function StoreControls({ onEditPlan }: { onEditPlan: () => void }
       <p className="mt-2 text-sm text-stone-600">
         {plan.experimental && <Badge>Experimental</Badge>} {plan.description}
       </p>
+      <PlanRules plan={plan} />
 
       <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <Field
@@ -79,7 +102,10 @@ export default function StoreControls({ onEditPlan }: { onEditPlan: () => void }
             onChange={(v) => setScenario({ estimatedBreakEvenRevenue: v ?? 0 })}
           />
         </Field>
-        <Field label={`Salespeople (${MIN_SALESPEOPLE}–${MAX_SALESPEOPLE})`} hint={state.keepRevenueOnHeadcountChange ? "Store revenue held constant" : "New person adds average sales"}>
+        <Field
+          label={`Salespeople (${MIN_SALESPEOPLE}–${MAX_SALESPEOPLE})`}
+          hint={`${managers > 0 ? `${n - managers} regular staff + ${managers} manager${managers > 1 ? "s" : ""} · ` : ""}${state.keepRevenueOnHeadcountChange ? "Store revenue held constant" : "New person adds average sales"}`}
+        >
           <div className="flex items-center gap-2">
             <Button onClick={() => update((s) => setHeadcount(s, n - 1))} disabled={n <= MIN_SALESPEOPLE} className="px-3 text-lg">
               −

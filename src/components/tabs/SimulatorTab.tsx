@@ -31,6 +31,7 @@ export default function SimulatorTab({ onEditPlan }: { onEditPlan: () => void })
       tenureYears: state.referenceTenure,
       mix: storeDepartmentMix(employees),
       headcount: employees.length,
+      managerCount: employees.filter((e) => e.isManager).length,
       storeRevenue: result.storeRevenue,
     }),
     [state.referenceTenure, employees, result.storeRevenue],
@@ -66,7 +67,7 @@ export default function SimulatorTab({ onEditPlan }: { onEditPlan: () => void })
 
       <SectionHeading>Company Results</SectionHeading>
       <CompanyResults result={result} />
-      <CurrentComparison proposed={result} current={currentResult} plan={plan} />
+      <CurrentComparison proposed={result} current={currentResult} plan={plan} employees={employees} />
 
       <SectionHeading note="Descriptive information for management discussion. The tool does not rank plans.">Plan Feedback</SectionHeading>
       <IncentiveAnalysis sections={analysis} plan={dPlan} />

@@ -124,6 +124,21 @@ export function commissionRuleFor(emp: Employee, plan: CompensationPlan): Commis
   return plan.tracks.enabled ? plan.tracks[emp.track].commission : plan.commission;
 }
 
+/**
+ * Commission on only the portion of personal sales above a threshold, at department rates.
+ * The excess is allocated across departments in proportion to the person's department sales,
+ * so nothing is paid retroactively on the first `excessThreshold` dollars.
+ */
+export function excessByDepartmentCommission(emp: Employee, rule: CommissionRule): number {
+  const excess = personalSales(emp) - (rule.excessThreshold ?? 0);
+  const deptTotal = departmentTotal(emp.sales);
+  if (excess <= 0 || deptTotal <= 0) return 0;
+  return DEPARTMENTS.reduce(
+    (s, d) => s + (excess * (emp.sales[d] || 0) * (rule.departmentRatesPct?.[d] ?? 0)) / deptTotal / 100,
+    0,
+  );
+}
+
 function isStoreBasis(rule: CommissionRule) {
   return rule.basis === "storeRevenue" || rule.basis === "storeGP";
 }
@@ -140,6 +155,8 @@ export function personalCommissionFor(
   switch (rule.basis) {
     case "personalRevenue":
       return calc(personalSales(emp));
+    case "personalExcessByDepartment":
+      return excessByDepartmentCommission(emp, rule);
     case "personalGP":
       return calc(personalGP(emp, scenario));
     case "departmentRevenue":
@@ -278,6 +295,11 @@ export function teamWeights(plan: CompensationPlan, employees: Employee[]): numb
   }
 }
 
+/** True when this plan does not pay this employee (manager compensated separately). */
+export function isPaidSeparately(emp: Employee, plan: CompensationPlan): boolean {
+  return !!plan.managersPaidSeparately && !!emp.isManager;
+}
+
 export function calculatePlan(
   plan: CompensationPlan,
   scenario: StoreScenario,
@@ -286,13 +308,33 @@ export function calculatePlan(
   const storeRevenue = storeRevenueOf(scenario, employees);
   const storeGP = storeGPOf(storeRevenue, scenario);
   const ctx: StoreContext = { storeRevenue, storeGP };
-  const headcount = employees.length;
+  // Store revenue above includes everyone (managers too); pay and the pool split cover participants only.
+  const participants = employees.filter((e) => !isPaidSeparately(e, plan));
+  const headcount = participants.length;
   const pool = teamPool(plan, scenario, ctx, headcount);
-  const weights = teamWeights(plan, employees);
+  const weights = teamWeights(plan, participants);
+  const weightById = new Map(participants.map((e, i) => [e.id, weights[i]]));
 
-  const results: EmployeeResult[] = employees.map((emp, i) => {
+  const results: EmployeeResult[] = employees.map((emp) => {
+    if (isPaidSeparately(emp, plan)) {
+      return {
+        employeeId: emp.id,
+        name: emp.name,
+        personalSales: personalSales(emp),
+        personalGP: personalGP(emp, scenario),
+        hourlyRate: 0,
+        basePay: 0,
+        personalCommission: 0,
+        departmentCommission: 0,
+        individualBonuses: 0,
+        teamBonus: 0,
+        total: 0,
+        storeLinkedPay: 0,
+        paidSeparately: true,
+      };
+    }
     const ind = individualPay(emp, plan, scenario, ctx);
-    const teamShare = pool * weights[i];
+    const teamShare = pool * (weightById.get(emp.id) ?? 0);
     const teamBonus = teamShare + ind.storeBonuses;
     const total = ind.basePay + ind.personalCommission + ind.departmentCommission + ind.individualBonuses + teamBonus;
     return {
@@ -339,4 +381,10 @@ export function calculatePlan(
     guaranteedPct: totals.total > 0 ? (totals.basePay / totals.total) * 100 : 0,
     teamShareOfVariablePct: variable > 0 ? (storeLinked / variable) * 100 : 0,
   };
+}
+
+/** Payroll for regular sales staff: everyone except employees flagged as managers. */
+export function regularStaffPayroll(result: CalculationResult, employees: Employee[]): number {
+  const managers = new Set(employees.filter((e) => e.isManager).map((e) => e.id));
+  return round2(result.employees.reduce((a, r) => a + (managers.has(r.employeeId) ? 0 : r.total), 0));
 }

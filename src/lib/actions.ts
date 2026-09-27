@@ -1,9 +1,9 @@
 // Pure state transitions used by the UI.
-import { distributeRevenue, MAX_SALESPEOPLE, MIN_SALESPEOPLE, newEmployee, storeDepartmentMix, withPersonalSales } from "./defaults";
+import { distributeRevenue, MAX_SALESPEOPLE, MIN_SALESPEOPLE, newEmployee, splitByMix, storeDepartmentMix, withPersonalSales } from "./defaults";
 import { personalSales, storeRevenueOf } from "./engine";
 import { uid } from "./presets";
 import type { AppState } from "./store";
-import type { Employee } from "./types";
+import type { Department, Employee } from "./types";
 
 export function currentStoreRevenue(s: AppState): number {
   return storeRevenueOf(s.scenario, s.employees);
@@ -55,4 +55,28 @@ export function setHeadcount(s: AppState, n: number): AppState {
 export function scaleToRevenue(s: AppState, revenue: number): AppState {
   const employees = distributeRevenue(s.employees, revenue, "proportional");
   return { ...s, employees, scenario: { ...s.scenario, storeRevenue: revenue } };
+}
+
+/** Re-split every salesperson's personal sales using one department mix (fractions summing to 1). */
+export function applySalesMix(s: AppState, mix: Record<Department, number>): AppState {
+  return { ...s, employees: s.employees.map((e) => ({ ...e, sales: splitByMix(personalSales(e), mix) })) };
+}
+
+/**
+ * Build a mix from an appliance share, keeping protection/other shares and the current
+ * furniture-to-mattress ratio. All values are fractions of total sales.
+ */
+export function mixWithApplianceShare(
+  current: Record<Department, number>,
+  appliances: number,
+  protection = current.protection,
+  other = current.other,
+): Record<Department, number> {
+  const p = Math.min(1, Math.max(0, protection));
+  const o = Math.min(1 - p, Math.max(0, other));
+  const a = Math.min(1 - p - o, Math.max(0, appliances));
+  const fm = 1 - a - p - o;
+  const fmNow = current.furniture + current.mattresses;
+  const furnShare = fmNow > 0 ? current.furniture / fmNow : 0.7;
+  return { appliances: a, furniture: fm * furnShare, mattresses: fm * (1 - furnShare), protection: p, other: o };
 }

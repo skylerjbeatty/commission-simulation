@@ -47,6 +47,9 @@ export default function AnnualTab() {
     });
 
   const diff = prop.totalComp - cur.totalComp;
+  const managerIds = new Set(employees.filter((e) => e.isManager).map((e) => e.id));
+  const showRegular = !!plan.managersPaidSeparately && managerIds.size > 0;
+  const regular = (sum: typeof cur) => sum.byEmployee.filter((e) => !managerIds.has(e.id)).reduce((a, e) => a + e.comp, 0);
 
   return (
     <div className="space-y-5">
@@ -138,6 +141,13 @@ export default function AnnualTab() {
             sub={`${pct(prop.grossProfit ? (prop.totalComp / prop.grossProfit) * 100 : 0, 1)} of GP`}
           />
           <Stat label="Annual difference (proposed − current)" value={changeLabel(diff)} emphasis sub="Change in company compensation expense" />
+          {showRegular && (
+            <Stat
+              label="Regular sales staff payroll (excl. managers)"
+              value={changeLabel(regular(prop) - regular(cur))}
+              sub={`Current ${money(regular(cur))} → proposed ${money(regular(prop))}`}
+            />
+          )}
           <Stat label="Average monthly sales comp" value={money(prop.avgMonthlyComp)} sub={`Current: ${money(cur.avgMonthlyComp)}`} />
           <Stat label="Total commission" value={money(prop.commission)} sub={`Current: ${money(cur.commission)}`} />
           <Stat label="Total team bonuses" value={money(prop.teamBonuses)} sub={`Current: ${money(cur.teamBonuses)}`} />
@@ -161,7 +171,10 @@ export default function AnnualTab() {
           <tbody>
             {prop.byEmployee.map((e, i) => (
               <tr key={e.id}>
-                <td className={`${td} font-medium`}>{e.name}</td>
+                <td className={`${td} font-medium`}>
+                  {e.name}
+                  {showRegular && managerIds.has(e.id) && <div className="text-xs font-normal text-stone-500">Manager — paid separately under {plan.name}</div>}
+                </td>
                 <td className={tdR}>{money(e.sales)}</td>
                 <td className={tdR}>{money(cur.byEmployee[i].comp)}</td>
                 <td className={`${tdR} font-semibold`}>{money(e.comp)}</td>

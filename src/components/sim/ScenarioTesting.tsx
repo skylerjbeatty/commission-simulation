@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import { useApp } from "../AppContext";
-import { Card, NumField, Segmented } from "../ui";
-import { applyStoreRevenue, currentStoreRevenue, redistribute } from "@/lib/actions";
-import { distributionWeights, type DistributionMode } from "@/lib/defaults";
+import { Card, NumField, Segmented, Slider } from "../ui";
+import { applySalesMix, applyStoreRevenue, currentStoreRevenue, mixWithApplianceShare, redistribute } from "@/lib/actions";
+import { distributionWeights, storeDepartmentMix, type DistributionMode } from "@/lib/defaults";
 import { money, pct } from "@/lib/format";
 
 export default function ScenarioTesting() {
@@ -14,6 +14,10 @@ export default function ScenarioTesting() {
   const [custom, setCustom] = useState<number | null>(null);
   const d = state.distribution;
   const weights = distributionWeights(state.employees, d.mode, d);
+  const mix = storeDepartmentMix(state.employees);
+  const r1 = (x: number) => Math.round(x * 1000) / 10; // fraction -> percent with 1 decimal
+  const setMix = (appliances: number, protection = mix.protection, other = mix.other) =>
+    update((s) => applySalesMix(s, mixWithApplianceShare(storeDepartmentMix(s.employees), appliances, protection, other)));
   const activeKey = state.revenuePresets.find((p) => Math.abs(p.revenue - revenue) < 1)?.key ?? "custom";
 
   const setDist = (patch: Partial<typeof d>) =>
@@ -129,6 +133,34 @@ export default function ScenarioTesting() {
             <span className="ml-1 text-stone-500 tabular-nums">· {money(revenue * weights[i])}</span>
           </div>
         ))}
+      </div>
+      <div className="mt-5 border-t border-stone-100 pt-4">
+        <div className="text-sm font-medium text-stone-700">Sales mix (applied to every salesperson)</div>
+        <div className="mt-2 grid gap-4 md:grid-cols-[minmax(0,2fr)_1fr_1fr]">
+          <div>
+            <Slider
+              label="Appliances vs furniture & mattresses"
+              value={r1(mix.appliances)}
+              onChange={(v) => setMix(v / 100)}
+              min={0}
+              max={100}
+              step={1}
+              format={(v) => `${v}% appliances`}
+            />
+            <div className="mt-1 text-xs text-stone-500">
+              Furniture &amp; mattresses: {r1(mix.furniture + mix.mattresses)}% (furniture {r1(mix.furniture)}%, mattresses {r1(mix.mattresses)}%)
+            </div>
+          </div>
+          <label className="block">
+            <span className="mb-1 block text-xs text-stone-600">Protection / accessories share</span>
+            <NumField size="sm" suffix="%" min={0} max={100} value={r1(mix.protection)} onChange={(v) => setMix(mix.appliances, (v ?? 0) / 100)} />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs text-stone-600">Other share</span>
+            <NumField size="sm" suffix="%" min={0} max={100} value={r1(mix.other)} onChange={(v) => setMix(mix.appliances, mix.protection, (v ?? 0) / 100)} />
+          </label>
+        </div>
+        <p className="mt-1 text-xs text-stone-500">Each person&apos;s total sales stay the same; only the department split changes. Edit individual departments in the Sales Team table.</p>
       </div>
       {d.mode === "custom" && (
         <p className="mt-2 text-xs text-stone-500">Custom shares are normalized to 100% (they currently add to {pct(Object.values(state.employees.map((e) => d.customShares[e.id] ?? 100 / state.employees.length)).reduce((a, b) => a + b, 0), 1)}).</p>

@@ -40,6 +40,7 @@ export const STYLE_OPTIONS: { value: CommissionStyle; label: string }[] = [
 
 export const BASIS_OPTIONS: { value: CommissionBasis; label: string }[] = [
   { value: "personalRevenue", label: "Personal revenue" },
+  { value: "personalExcessByDepartment", label: "Personal sales above a threshold, department rates" },
   { value: "personalGP", label: "Personal gross profit" },
   { value: "departmentRevenue", label: "Department revenue (tiers per department)" },
   { value: "departmentGP", label: "Department gross profit (tiers per department)" },
@@ -139,12 +140,60 @@ export function CommissionRuleEditor({
   showBasis?: boolean;
 }) {
   const gp = rule.basis.includes("GP");
+  if (rule.basis === "personalExcessByDepartment") {
+    const t = rule.excessThreshold ?? 0;
+    const rates = rule.departmentRatesPct ?? { appliances: 0, furniture: 0, mattresses: 0, protection: 0, other: 0 };
+    return (
+      <div className="space-y-4">
+        <div className="flex flex-wrap gap-4">
+          {showBasis && (
+            <Field label="Commission basis">
+              <Select value={rule.basis} onChange={(basis) => onChange({ ...rule, basis })} options={BASIS_OPTIONS} />
+            </Field>
+          )}
+          <Field label="No commission on the first" hint="Personal monthly sales">
+            <NumField className="w-36" prefix="$" decimals={0} min={0} value={t} onChange={(v) => onChange({ ...rule, excessThreshold: v ?? 0 })} />
+          </Field>
+        </div>
+        <div className="flex flex-wrap gap-4">
+          {DEPARTMENTS.map((d) => (
+            <Field key={d} label={`${DEPARTMENT_LABELS[d]} rate`}>
+              <NumField
+                className="w-24"
+                suffix="%"
+                min={0}
+                value={rates[d]}
+                onChange={(v) => onChange({ ...rule, departmentRatesPct: { ...rates, [d]: v ?? 0 } })}
+              />
+            </Field>
+          ))}
+        </div>
+        <p className="rounded-md bg-stone-50 p-3 text-sm text-stone-600">
+          Rates apply only to sales above {money(t)}, split across departments by each person&apos;s sales mix. They are never applied back to the first{" "}
+          {money(t)}. At exactly {money(t)} a salesperson earns no personal commission yet; it starts with the next dollar sold. Example: $60,000 in
+          sales pays on $10,000.
+        </p>
+      </div>
+    );
+  }
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-4">
         {showBasis && (
           <Field label="Commission basis">
-            <Select value={rule.basis} onChange={(basis) => onChange({ ...rule, basis })} options={BASIS_OPTIONS} />
+            <Select
+              value={rule.basis}
+              onChange={(basis) =>
+                onChange({
+                  ...rule,
+                  basis,
+                  ...(basis === "personalExcessByDepartment" && !rule.departmentRatesPct
+                    ? { excessThreshold: 50000, departmentRatesPct: { appliances: 1, furniture: 2, mattresses: 2, protection: 0, other: 0 } }
+                    : {}),
+                })
+              }
+              options={BASIS_OPTIONS}
+            />
           </Field>
         )}
         <Field

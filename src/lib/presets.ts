@@ -273,7 +273,48 @@ export function buildPresets(): CompensationPlan[] {
       },
       team: hybridTeam(),
     }),
+    teamFirst50k(),
   ];
+}
+
+export const TEAM_FIRST_50K_ID = "preset_team_first_50k";
+
+/** Fixed policy notes; the numeric rules are generated from plan settings (see describePlanRules). */
+export const TEAM_FIRST_50K_NOTES = [
+  "Payroll timing (not simulated): sales count in the month they are booked, earned commission is paid after delivery, and commission is reversed for returns.",
+  "Manufacturer SPIFs and protection plan pay are separate and not included here.",
+];
+
+function teamFirst50k(): CompensationPlan {
+  return makePlan({
+    id: TEAM_FIRST_50K_ID,
+    name: "TEAM FIRST, PERSONAL COMMISSION AFTER $50K",
+    description:
+      "$15/hour for actual hours. A team pool of 1% of total store sales (manager's sales included) split among regular sales staff by hours worked. Personal commission only on sales above $50,000: 1% appliances, 2% furniture and mattresses. $500 milestone bonuses at $50k, $75k and $100k. The manager is paid separately.",
+    managersPaidSeparately: true,
+    policyNotes: TEAM_FIRST_50K_NOTES,
+    commission: {
+      enabled: true,
+      basis: "personalExcessByDepartment",
+      style: "flat",
+      flatRatePct: 0,
+      tiers: [],
+      excessThreshold: 50000,
+      departmentRatesPct: { appliances: 1, furniture: 2, mattresses: 2, protection: 0, other: 0 },
+    },
+    bonuses: [
+      bonus("$50k milestone", 50000, 500),
+      bonus("$75k milestone", 75000, 500),
+      bonus("$100k milestone", 100000, 500),
+    ],
+    team: {
+      ...teamOff(),
+      enabled: true,
+      poolType: "revenuePercent",
+      poolRatePct: 1,
+      distribution: "hours",
+    },
+  });
 }
 
 /** A blank plan for the Plan Builder. */

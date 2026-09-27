@@ -34,6 +34,8 @@ export interface ReferenceOptions {
   storeRevenue?: number;
   /** Headcount used to size a per-person share of the team pool. */
   headcount?: number;
+  /** Managers included in headcount; excluded from the team split for plans that pay managers separately. */
+  managerCount?: number;
   mix?: Record<Department, number>;
   /** Scenario override (e.g. discounted margins). */
   scenario?: StoreScenario;
@@ -76,7 +78,7 @@ export function referencePay(
 
   const storeRevenue = opts.storeRevenue ?? scenario.storeRevenue;
   const ctx: StoreContext = { storeRevenue, storeGP: storeGPOf(storeRevenue, sc) };
-  const headcount = Math.max(1, opts.headcount ?? 5);
+  const headcount = Math.max(1, (opts.headcount ?? 5) - (plan.managersPaidSeparately ? (opts.managerCount ?? 0) : 0));
   const ind = individualPay(emp, plan, sc, ctx);
   const team = teamPool(plan, sc, ctx, headcount) / headcount + ind.storeBonuses;
   const total = ind.basePay + ind.personalCommission + ind.departmentCommission + ind.individualBonuses + team;
@@ -219,7 +221,10 @@ export function personalThresholds(
   for (const track of tracksFor(plan)) {
     const rule = plan.tracks.enabled ? plan.tracks[track].commission : plan.commission;
     const trackLabel = plan.tracks.enabled ? `${plan.tracks[track].label}: ` : "";
-    if (rule.enabled && rule.style !== "flat") {
+    if (rule.enabled && rule.basis === "personalExcessByDepartment" && (rule.excessThreshold ?? 0) > 0) {
+      out.push({ sales: rule.excessThreshold!, source: `${trackLabel}Personal commission starts above ${money(rule.excessThreshold!)}`, track });
+    }
+    if (rule.enabled && rule.style !== "flat" && rule.basis !== "personalExcessByDepartment") {
       for (const t of sortTiers(rule.tiers)) {
         if (t.threshold <= 0) continue;
         const label = `${trackLabel}${pct(t.ratePct)} commission tier`;
@@ -510,8 +515,11 @@ export function incentiveAnalysis(
 ): AnalysisSection[] {
   const mix = opts.mix ?? storeDepartmentMix(employees);
   const headcount = opts.headcount ?? Math.max(1, employees.length);
+  const managerCount = opts.managerCount ?? employees.filter((e) => e.isManager).length;
+  // People this plan actually pays (managers excluded when they are paid separately).
+  const payHeadcount = Math.max(1, headcount - (plan.managersPaidSeparately ? managerCount : 0));
   const storeRevenue = opts.storeRevenue ?? calculatePlan(plan, scenario, employees).storeRevenue;
-  const o: ReferenceOptions = { ...opts, mix, headcount, storeRevenue };
+  const o: ReferenceOptions = { ...opts, mix, headcount, managerCount, storeRevenue };
   const tracks = tracksFor(plan);
   const trackName = (t: Track) => (plan.tracks.enabled ? ` (${plan.tracks[t].label})` : "");
   const at = (s: number, t: Track = tracks[0]) => referencePay(plan, scenario, s, { ...o, track: t });
@@ -580,8 +588,8 @@ export function incentiveAnalysis(
       obs.push("No compensation in this plan depends on total store results.");
     } else {
       for (const r of SENSITIVITY_REVENUES) {
-        const pp = companyCostAt(plan, scenario, r, headcount, { mix, tenureYears: o.tenureYears });
-        const team = pp.totals.teamBonus / headcount;
+        const pp = companyCostAt(plan, scenario, r, payHeadcount, { mix, tenureYears: o.tenureYears });
+        const team = pp.totals.teamBonus / payHeadcount;
         obs.push(
           plan.team.enabled && plan.team.distribution === "equal"
             ? `At ${money(r)} store revenue, each salesperson receives a ${money(team)} team bonus.`
@@ -720,8 +728,9 @@ export function planMetrics(
 ): PlanMetrics {
   const mix = storeDepartmentMix(employees);
   const headcount = Math.max(1, employees.length);
+  const managerCount = employees.filter((e) => e.isManager).length;
   const result = calculatePlan(plan, scenario, employees);
-  const o: ReferenceOptions = { mix, headcount, storeRevenue: result.storeRevenue };
+  const o: ReferenceOptions = { mix, headcount, managerCount, storeRevenue: result.storeRevenue };
   const tracks = tracksFor(plan);
   const avg = (f: (t: Track) => number) => tracks.reduce((s, t) => s + f(t), 0) / tracks.length;
   const individualIncentive = avg(

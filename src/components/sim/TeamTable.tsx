@@ -66,6 +66,13 @@ export default function TeamTable() {
                   onChange={(ev) => setEmp(e.id, { name: ev.target.value })}
                   className="w-28 rounded-md border border-stone-300 px-2 py-1 font-medium outline-none focus:border-stone-600"
                 />
+                <label
+                  className="mt-0.5 flex items-center gap-1 text-[11px] text-stone-500"
+                  title="Sales manager: sales always count toward store totals. Plans marked 'manager paid separately' don't pay this person."
+                >
+                  <input type="checkbox" checked={!!e.isManager} onChange={(ev) => setEmp(e.id, { isManager: ev.target.checked })} />
+                  manager
+                </label>
               </td>
               <td className={tdR}>
                 <NumField size="sm" className="w-16" value={e.tenureYears} min={0} onChange={(v) => setEmp(e.id, { tenureYears: v ?? 0 })} ariaLabel="Tenure" />
@@ -180,6 +187,12 @@ export default function TeamTable() {
         </tfoot>
       </Table>
       {showTrack && <p className="mt-2 text-xs text-stone-500">This plan has two tracks. Choose each salesperson&apos;s track above.</p>}
+      {plan.managersPaidSeparately && (
+        <p className="mt-2 text-xs text-stone-500">
+          {plan.name} pays managers separately: their sales count toward store sales and the team pool, but they are not paid by this plan and
+          don&apos;t share the pool.
+        </p>
+      )}
     </Card>
   );
 }

@@ -8,7 +8,8 @@ import { STYLE_HELP } from "../builder/Editors";
 import { earningsCurve, referencePay, tracksFor, type ReferenceOptions } from "@/lib/analysis";
 import { changeLabel, kMoney, money } from "@/lib/format";
 import { duplicatePlan, uid } from "@/lib/presets";
-import type { CommissionRule, CommissionStyle, CompensationPlan, StoreScenario, Track } from "@/lib/types";
+import { DEPARTMENTS, type CommissionRule, type CommissionStyle, type CompensationPlan, type StoreScenario, type Track } from "@/lib/types";
+import { DEPARTMENT_LABELS } from "@/lib/defaults";
 
 const pctFmt = (v: number) => `${v.toFixed(2).replace(/\.?0+$/, "")}%`;
 const dollars = (v: number) => money(v);
@@ -256,7 +257,39 @@ export default function EarningsWorkbench({
                   ]}
                 />
               )}
-              {rule.enabled ? (
+              {rule.enabled && rule.basis === "personalExcessByDepartment" ? (
+                <div className="space-y-3">
+                  <Slider
+                    label="No commission on the first"
+                    value={rule.excessThreshold ?? 0}
+                    onChange={(v) => setRule((r) => ({ ...r, excessThreshold: v }))}
+                    min={0}
+                    max={120000}
+                    step={1000}
+                    format={dollars}
+                  />
+                  {DEPARTMENTS.map((d) => {
+                    const rates = rule.departmentRatesPct ?? { appliances: 0, furniture: 0, mattresses: 0, protection: 0, other: 0 };
+                    return (
+                      <Slider
+                        key={d}
+                        label={`${DEPARTMENT_LABELS[d]} rate (above threshold)`}
+                        value={rates[d]}
+                        onChange={(v) => setRule((r) => ({ ...r, departmentRatesPct: { ...rates, [d]: v } }))}
+                        min={0}
+                        max={6}
+                        step={0.1}
+                        format={pctFmt}
+                      />
+                    );
+                  })}
+                  <p className="text-xs text-stone-500">
+                    Paid only on sales above {money(rule.excessThreshold ?? 0)}, never on the first {money(rule.excessThreshold ?? 0)}. At exactly{" "}
+                    {money(rule.excessThreshold ?? 0)} no personal commission is earned yet; it starts with the next dollar.
+                  </p>
+                </div>
+              ) : null}
+              {rule.enabled && rule.basis === "personalExcessByDepartment" ? null : rule.enabled ? (
                 <>
                   <div>
                     <Segmented<CommissionStyle>

@@ -157,7 +157,14 @@ export function NumField({
         className={`w-full min-w-0 bg-transparent px-2 tabular-nums outline-none disabled:text-stone-500 ${sizes[size]} ${inputClassName}`}
         value={shown}
         placeholder={placeholder}
-        onFocus={() => setDraft(value === null || value === undefined ? "" : String(value))}
+        onFocus={(e) => {
+          setDraft(value === null || value === undefined ? "" : String(value));
+          // Select everything after React swaps in the unformatted value, so typing replaces it.
+          const el = e.currentTarget;
+          requestAnimationFrame(() => {
+            if (document.activeElement === el) el.select();
+          });
+        }}
         onChange={(e) => {
           setDraft(e.target.value);
           commit(e.target.value);
@@ -171,7 +178,7 @@ export function NumField({
 
 export function Field({ label, hint, children, className = "" }: { label: ReactNode; hint?: ReactNode; children: ReactNode; className?: string }) {
   return (
-    <label className={`block ${className}`}>
+    <label className={`block max-w-full min-w-0 ${className}`}>
       <span className="mb-1 block text-xs font-medium text-stone-600">{label}</span>
       {children}
       {hint && <span className="mt-1 block text-xs text-stone-500">{hint}</span>}

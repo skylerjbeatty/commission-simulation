@@ -75,10 +75,10 @@ export function newEmployee(id: string, name: string, tenureYears: number, sales
   };
 }
 
-/** Sample team. Sales total $225,000; tenure values are placeholders to edit. */
+/** Sample team. Sales total $225,000; tenure values are placeholders to edit. Adam is the sales manager. */
 export function defaultEmployees(): Employee[] {
   return [
-    newEmployee("emp_adam", "Adam", 8, 55000),
+    { ...newEmployee("emp_adam", "Adam", 8, 55000), isManager: true },
     newEmployee("emp_john", "John", 5, 50000),
     newEmployee("emp_chaneice", "Chaneice", 3, 45000),
     newEmployee("emp_kristene", "Kristene", 2, 40000),

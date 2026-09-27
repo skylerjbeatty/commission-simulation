@@ -3,7 +3,7 @@
 import { useState, type ReactNode } from "react";
 import { useApp } from "../AppContext";
 import { Badge, Button, Card, Field, NumField, Note, Select, TextField, Toggle, Table, td, tdR, th, thR } from "../ui";
-import { PlanSelect } from "../sim/StoreControls";
+import { PlanRules, PlanSelect } from "../sim/StoreControls";
 import { BonusEditor, CommissionRuleEditor, STYLE_OPTIONS, TeamEditor, TierEditor } from "../builder/Editors";
 import { blankPlan, buildPresets, CURRENT_PLAN_ID, duplicatePlan } from "@/lib/presets";
 import { DEPARTMENT_LABELS } from "@/lib/defaults";
@@ -104,6 +104,27 @@ export default function BuilderTab() {
             {plan.locked && <Badge tone="dark">Locked</Badge>}
             {plan.experimental && <Badge>Experimental</Badge>}
           </div>
+
+          <PlanRules plan={plan} />
+
+          <Section
+            n="0"
+            title="Who this plan pays"
+            right={
+              <Toggle
+                checked={!!plan.managersPaidSeparately}
+                onChange={(v) => set((p) => ({ ...p, managersPaidSeparately: v }))}
+                label="Manager paid separately"
+              />
+            }
+          >
+            <p className="text-sm text-stone-600">
+              {plan.managersPaidSeparately
+                ? "Salespeople marked as manager are not paid by this plan and don't share the team pool. Their sales still count toward store sales and the pool."
+                : "Everyone on the sales team, including anyone marked as manager, is paid by this plan."}{" "}
+              Mark managers in the Sales Team table on the Simulator.
+            </p>
+          </Section>
 
           <Section n="1" title="Base Pay">
             <BaseEditor plan={plan} set={set} />

@@ -5,7 +5,7 @@ import { useApp } from "../AppContext";
 import { Badge, Card, Note, Table, td, tdR, th, thR } from "../ui";
 import { EarningsCurve } from "../sim/Charts";
 import { planMetrics, type ReferenceOptions } from "@/lib/analysis";
-import { calculatePlan } from "@/lib/engine";
+import { calculatePlan, regularStaffPayroll } from "@/lib/engine";
 import { storeDepartmentMix } from "@/lib/defaults";
 import { changeLabel, money, pct } from "@/lib/format";
 import { CURRENT_PLAN_ID } from "@/lib/presets";
@@ -28,11 +28,28 @@ export default function CompareTab() {
   const currentTotal = metrics[0].result.totals.total;
   const opts = useMemo<ReferenceOptions>(() => {
     const r = calculatePlan(current, scenario, employees);
-    return { tenureYears: state.referenceTenure, mix: storeDepartmentMix(employees), headcount: employees.length, storeRevenue: r.storeRevenue };
+    return { tenureYears: state.referenceTenure, mix: storeDepartmentMix(employees), headcount: employees.length,
+      managerCount: employees.filter((e) => e.isManager).length, storeRevenue: r.storeRevenue };
   }, [current, scenario, employees, state.referenceTenure]);
 
+  const managerNames = employees.filter((e) => e.isManager).map((e) => e.name);
+  const showRegular = managerNames.length > 0 && columns.some((p) => p.managersPaidSeparately);
+  const regularRow = showRegular
+    ? [
+        {
+          label: "Regular sales staff payroll",
+          hint: `Excludes ${managerNames.join(", ")} in every column, for a like-for-like comparison`,
+          values: metrics.map((m) => money(regularStaffPayroll(m.result, employees))),
+        },
+      ]
+    : [];
   const rows: { label: string; hint?: string; values: string[] }[] = [
-    { label: "Total company cost (month)", values: metrics.map((m) => money(m.result.totals.total)) },
+    {
+      label: "Total company cost (month)",
+      hint: showRegular ? "Plans marked 'manager paid separately' exclude manager pay" : undefined,
+      values: metrics.map((m) => money(m.result.totals.total)),
+    },
+    ...regularRow,
     {
       label: "Change vs current plan",
       values: metrics.map((m, i) => (i === 0 ? "—" : changeLabel(m.result.totals.total - currentTotal))),
@@ -142,6 +159,12 @@ export default function CompareTab() {
                 <td className={`${td} font-medium`}>{e.name}</td>
                 <td className={tdR}>{money(metrics[0].result.employees[i].personalSales)}</td>
                 {metrics.map((m, j) => {
+                  if (m.result.employees[i].paidSeparately)
+                    return (
+                      <td key={j} className={`${tdR} text-xs text-stone-500 italic`}>
+                        Paid separately
+                      </td>
+                    );
                   const v = m.result.employees[i].total;
                   const d = v - metrics[0].result.employees[i].total;
                   return (
