@@ -102,7 +102,8 @@ export function storeDepartmentMix(employees: Employee[]): Record<Department, nu
 export function withPersonalSales(emp: Employee, total: number, fallbackMix: Record<Department, number>): Employee {
   const own = departmentTotal(emp.sales);
   const mix = own > 0 ? (Object.fromEntries(DEPARTMENTS.map((d) => [d, emp.sales[d] / own])) as Record<Department, number>) : fallbackMix;
-  return { ...emp, sales: splitByMix(total, mix), manualPersonalSales: Math.round(total) };
+  // Setting a total replaces any entered transactions for this calculation (they no longer add up).
+  return { ...emp, sales: splitByMix(total, mix), manualPersonalSales: Math.round(total), useTransactions: false };
 }
 
 export type DistributionMode = "equal" | "topHeavy" | "custom" | "proportional";
@@ -143,11 +144,17 @@ export function distributeRevenue(
   employees: Employee[],
   total: number,
   mode: DistributionMode,
-  opts: { topHeavyIntensity?: number; customShares?: Record<string, number> } = {},
+  opts: { topHeavyIntensity?: number; customShares?: Record<string, number>; lockTransactions?: boolean } = {},
 ): Employee[] {
-  const weights = distributionWeights(employees, mode, opts);
   const mix = storeDepartmentMix(employees);
-  return employees.map((e, i) => withPersonalSales(e, total * weights[i], mix));
+  // Optionally keep people whose sales come from entered transactions fixed; split the rest of the revenue among everyone else.
+  const locked = (e: Employee) => !!opts.lockTransactions && !!e.useTransactions && (e.transactions?.length ?? 0) > 0;
+  const free = employees.filter((e) => !locked(e));
+  const lockedTotal = employees.filter(locked).reduce((a, e) => a + departmentTotal(e.sales), 0);
+  const weights = distributionWeights(free, mode, opts);
+  const remaining = Math.max(0, total - lockedTotal);
+  const byId = new Map(free.map((e, i) => [e.id, withPersonalSales(e, remaining * weights[i], mix)]));
+  return employees.map((e) => byId.get(e.id) ?? e);
 }
 
 export const MONTHS = [

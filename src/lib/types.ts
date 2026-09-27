@@ -15,6 +15,17 @@ export type DepartmentSales = Record<Department, number>;
 
 export type Track = "stability" | "performance";
 
+/** One booked sale. Entered in booking order (top = first sale of the month). */
+export interface SaleTransaction {
+  id: string;
+  department: Department;
+  amount: number;
+  /** Commission is earned when booked but paid after delivery. */
+  delivered: boolean;
+  /** A returned sale is removed from sales and its commission is reversed. */
+  returned: boolean;
+}
+
 export interface Employee {
   id: string;
   name: string;
@@ -35,6 +46,9 @@ export interface Employee {
    * count toward store totals, but the plan pays them nothing and they get no team pool share.
    */
   isManager?: boolean;
+  /** Individual sales. When useTransactions is on, department sales are the totals of these. */
+  transactions?: SaleTransaction[];
+  useTransactions?: boolean;
 }
 
 export interface StoreScenario {
@@ -81,6 +95,8 @@ export interface CommissionRule {
   excessThreshold?: number;
   /** personalExcessByDepartment only: rate per department on the portion above the threshold. */
   departmentRatesPct?: Record<Department, number>;
+  /** personalExcessByDepartment only: optional small rate on personal sales up to the threshold ("from the first sale"). */
+  baseRatePct?: number;
 }
 
 export interface BasePay {
@@ -137,6 +153,8 @@ export interface TeamPlan {
   poolRatePct: number;
   gpTarget: number;
   distribution: TeamDistribution;
+  /** Display only: the pool is earned monthly; this is when it is paid out. */
+  payout?: "monthly" | "quarterly";
   /** For "blended": share of the pool split by personal sales; the rest is split equally. */
   salesWeightPct: number;
 }
@@ -203,6 +221,10 @@ export interface EmployeeResult {
   storeLinkedPay: number;
   /** Manager excluded from this plan (paid separately); all pay fields are 0. */
   paidSeparately?: boolean;
+  /** Above-threshold commission was estimated from monthly department totals (no transactions entered). */
+  commissionIsEstimate?: boolean;
+  /** Commission earned on booked sales that are not yet delivered (paid after delivery). */
+  pendingDeliveryCommission?: number;
 }
 
 export interface CompTotals {

@@ -17,6 +17,8 @@ export function describePlanRules(plan: CompensationPlan): string[] {
     out.push(
       `Personal commission is paid only on sales above ${money(t)}${paid.length ? `: ${paid.join(", ")}` : ""}. It is never applied back to the first ${money(t)}.`,
     );
+    if ((rule.baseRatePct ?? 0) > 0)
+      out.push(`Plus a small personal commission from the first sale: ${pct(rule.baseRatePct!, 2)} on personal sales up to ${money(t)}.`);
   }
   const milestones = plan.bonuses.filter((b) => b.trigger === "personalSales" && b.type === "flat").sort((a, b) => a.threshold - b.threshold);
   if (milestones.length > 1) {

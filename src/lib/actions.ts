@@ -1,9 +1,9 @@
 // Pure state transitions used by the UI.
 import { distributeRevenue, MAX_SALESPEOPLE, MIN_SALESPEOPLE, newEmployee, splitByMix, storeDepartmentMix, withPersonalSales } from "./defaults";
-import { personalSales, storeRevenueOf } from "./engine";
+import { departmentTotal, personalSales, salesFromTransactions, storeRevenueOf, usesTransactions } from "./engine";
 import { uid } from "./presets";
 import type { AppState } from "./store";
-import type { Department, Employee } from "./types";
+import type { Department, Employee, SaleTransaction } from "./types";
 
 export function currentStoreRevenue(s: AppState): number {
   return storeRevenueOf(s.scenario, s.employees);
@@ -11,7 +11,7 @@ export function currentStoreRevenue(s: AppState): number {
 
 /** Set store revenue and split it across salespeople using the chosen distribution. */
 export function applyStoreRevenue(s: AppState, revenue: number): AppState {
-  const employees = distributeRevenue(s.employees, revenue, s.distribution.mode, s.distribution);
+  const employees = distributeRevenue(s.employees, revenue, s.distribution.mode, { ...s.distribution, lockTransactions: true });
   return { ...s, employees, scenario: { ...s.scenario, storeRevenue: revenue } };
 }
 
@@ -53,13 +53,31 @@ export function setHeadcount(s: AppState, n: number): AppState {
 
 /** Scale everyone's sales proportionally so the total matches `revenue`. */
 export function scaleToRevenue(s: AppState, revenue: number): AppState {
-  const employees = distributeRevenue(s.employees, revenue, "proportional");
+  const employees = distributeRevenue(s.employees, revenue, "proportional", { lockTransactions: true });
   return { ...s, employees, scenario: { ...s.scenario, storeRevenue: revenue } };
 }
 
 /** Re-split every salesperson's personal sales using one department mix (fractions summing to 1). */
 export function applySalesMix(s: AppState, mix: Record<Department, number>): AppState {
-  return { ...s, employees: s.employees.map((e) => ({ ...e, sales: splitByMix(personalSales(e), mix) })) };
+  // People with entered transactions keep their actual department split.
+  return {
+    ...s,
+    employees: s.employees.map((e) => (usesTransactions(e) ? e : { ...e, sales: splitByMix(personalSales(e), mix) })),
+  };
+}
+
+/** Replace a salesperson's transactions and keep their department totals in sync. */
+export function setTransactions(s: AppState, id: string, transactions: SaleTransaction[], useTransactions?: boolean): AppState {
+  return {
+    ...s,
+    employees: s.employees.map((e) => {
+      if (e.id !== id) return e;
+      const on = useTransactions ?? !!e.useTransactions;
+      if (!on) return { ...e, transactions, useTransactions: false };
+      const sales = salesFromTransactions(transactions);
+      return { ...e, transactions, useTransactions: true, sales, useDepartmentTotal: true, manualPersonalSales: departmentTotal(sales) };
+    }),
+  };
 }
 
 /**

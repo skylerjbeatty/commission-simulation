@@ -1,16 +1,19 @@
 "use client";
 
+import { Fragment, useState } from "react";
 import { useApp } from "../AppContext";
+import TransactionEditor from "./TransactionEditor";
 import { Button, Card, NumField, Select, Table, td, tdR, th, thR } from "../ui";
 import { addEmployee, removeEmployee } from "@/lib/actions";
 import { DEPARTMENT_SHORT, MAX_SALESPEOPLE, MIN_SALESPEOPLE } from "@/lib/defaults";
-import { departmentTotal, personalSales } from "@/lib/engine";
+import { departmentTotal, personalSales, usesTransactions } from "@/lib/engine";
 import { money } from "@/lib/format";
 import { DEPARTMENTS, type Employee, type Track } from "@/lib/types";
 
 export default function TeamTable() {
   const { state, update, planById } = useApp();
   const plan = planById(state.selectedPlanId);
+  const [openTx, setOpenTx] = useState<string | null>(null);
   const setEmp = (id: string, patch: Partial<Employee>) =>
     update((s) => ({ ...s, employees: s.employees.map((e) => (e.id === id ? { ...e, ...patch } : e)) }));
   const move = (i: number, dir: -1 | 1) =>
@@ -58,7 +61,8 @@ export default function TeamTable() {
         </thead>
         <tbody>
           {state.employees.map((e, i) => (
-            <tr key={e.id}>
+            <Fragment key={e.id}>
+            <tr>
               <td className={td}>
                 <input
                   aria-label="Employee name"
@@ -102,6 +106,7 @@ export default function TeamTable() {
                     decimals={0}
                     min={0}
                     value={e.sales[d]}
+                    disabled={usesTransactions(e)}
                     onChange={(v) => setEmp(e.id, { sales: { ...e.sales, [d]: v ?? 0 } })}
                     ariaLabel={`${DEPARTMENT_SHORT[d]} sales`}
                   />
@@ -122,7 +127,13 @@ export default function TeamTable() {
                     ariaLabel="Manual personal sales"
                   />
                 )}
-                <label className="mt-0.5 flex items-center justify-end gap-1 text-[11px] text-stone-500">
+                <button
+                  className={`mt-0.5 block w-full text-right text-[11px] underline ${usesTransactions(e) ? "font-semibold text-stone-800" : "text-stone-500"}`}
+                  onClick={() => setOpenTx(openTx === e.id ? null : e.id)}
+                >
+                  {usesTransactions(e) ? `${e.transactions!.length} transactions` : "enter transactions"}
+                </button>
+                <label className={`mt-0.5 flex items-center justify-end gap-1 text-[11px] text-stone-500 ${usesTransactions(e) ? "hidden" : ""}`}>
                   <input
                     type="checkbox"
                     checked={!e.useDepartmentTotal}
@@ -170,6 +181,14 @@ export default function TeamTable() {
                 </button>
               </td>
             </tr>
+            {openTx === e.id && (
+              <tr>
+                <td colSpan={11 + (showTrack ? 1 : 0) + (showWeight ? 1 : 0)} className="border-b border-stone-200 bg-stone-50 p-3">
+                  <TransactionEditor employee={e} onClose={() => setOpenTx(null)} />
+                </td>
+              </tr>
+            )}
+            </Fragment>
           ))}
         </tbody>
         <tfoot>

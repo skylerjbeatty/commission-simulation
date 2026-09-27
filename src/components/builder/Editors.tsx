@@ -154,6 +154,9 @@ export function CommissionRuleEditor({
           <Field label="No commission on the first" hint="Personal monthly sales">
             <NumField className="w-36" prefix="$" decimals={0} min={0} value={t} onChange={(v) => onChange({ ...rule, excessThreshold: v ?? 0 })} />
           </Field>
+          <Field label="Small commission from the first sale" hint={`On sales up to ${money(t)} · 0 = none`}>
+            <NumField className="w-28" suffix="%" min={0} value={rule.baseRatePct ?? 0} onChange={(v) => onChange({ ...rule, baseRatePct: v ?? 0 })} />
+          </Field>
         </div>
         <div className="flex flex-wrap gap-4">
           {DEPARTMENTS.map((d) => (
@@ -354,6 +357,16 @@ export function TeamEditor({ team, onChange, breakEven }: { team: TeamPlan; onCh
         )}
         <Field label="Distribution">
           <Select value={team.distribution} onChange={(distribution) => onChange({ ...team, distribution })} options={DISTRIBUTIONS} />
+        </Field>
+        <Field label="Paid (display only)" hint="Always earned monthly">
+          <Select
+            value={team.payout ?? "monthly"}
+            onChange={(payout) => onChange({ ...team, payout })}
+            options={[
+              { value: "monthly", label: "Monthly" },
+              { value: "quarterly", label: "Quarterly" },
+            ]}
+          />
         </Field>
         {team.distribution === "blended" && (
           <Field label="Share split by personal sales">

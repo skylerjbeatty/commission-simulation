@@ -10,11 +10,12 @@ import { CompanyResults, CurrentComparison, EmployeeResults } from "../sim/Resul
 import { CliffDetector, IncentiveAnalysis, ProductionTable } from "../sim/PlanFeedback";
 import { CostCurve } from "../sim/Charts";
 import EarningsWorkbench from "../sim/EarningsWorkbench";
+import EarningsStory from "../sim/EarningsStory";
 import { BreakEvenContext, SensitivityTable, StaffingAnalysis } from "../sim/Insights";
 import { calculatePlan } from "@/lib/engine";
 import { detectCliffs, incentiveAnalysis, productionTable, sensitivityTable, staffingTable, type ReferenceOptions } from "@/lib/analysis";
 import { storeDepartmentMix } from "@/lib/defaults";
-import { CURRENT_PLAN_ID } from "@/lib/presets";
+import { CURRENT_PLAN_ID, firstSaleVariant, supportsFirstSaleVariant } from "@/lib/presets";
 
 export default function SimulatorTab({ onEditPlan }: { onEditPlan: () => void }) {
   const { state, planById } = useApp();
@@ -25,6 +26,12 @@ export default function SimulatorTab({ onEditPlan }: { onEditPlan: () => void })
 
   const result = useMemo(() => calculatePlan(plan, scenario, employees), [plan, scenario, employees]);
   const currentResult = useMemo(() => calculatePlan(current, scenario, employees), [current, scenario, employees]);
+  // Optional "small commission from the first sale" variation, compared side by side without changing the plan.
+  const variantPlan = useMemo(
+    () => (state.firstSaleVariant.enabled && supportsFirstSaleVariant(plan) ? firstSaleVariant(plan, state.firstSaleVariant.ratePct) : null),
+    [plan, state.firstSaleVariant],
+  );
+  const variantResult = useMemo(() => (variantPlan ? calculatePlan(variantPlan, scenario, employees) : null), [variantPlan, scenario, employees]);
 
   const opts = useMemo<ReferenceOptions>(
     () => ({
@@ -63,11 +70,12 @@ export default function SimulatorTab({ onEditPlan }: { onEditPlan: () => void })
       <TeamTable />
 
       <SectionHeading>Employee Results</SectionHeading>
+      <EarningsStory plan={plan} result={result} current={currentResult} variant={variantResult} />
       <EmployeeResults result={result} plan={plan} />
 
       <SectionHeading>Company Results</SectionHeading>
       <CompanyResults result={result} />
-      <CurrentComparison proposed={result} current={currentResult} plan={plan} employees={employees} />
+      <CurrentComparison proposed={result} current={currentResult} plan={plan} employees={employees} variant={variantResult} variantName={variantPlan?.name} />
 
       <SectionHeading note="Descriptive information for management discussion. The tool does not rank plans.">Plan Feedback</SectionHeading>
       <IncentiveAnalysis sections={analysis} plan={dPlan} />
@@ -78,7 +86,7 @@ export default function SimulatorTab({ onEditPlan }: { onEditPlan: () => void })
       <EarningsWorkbench
         plan={plan}
         current={current}
-        extraPlans={curvePlans}
+        extraPlans={variantPlan ? [...curvePlans, variantPlan] : curvePlans}
         scenario={scenario}
         opts={opts}
         extraControls={

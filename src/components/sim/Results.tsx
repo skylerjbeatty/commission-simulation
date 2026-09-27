@@ -3,7 +3,7 @@
 import { Card, Note, Stat, Table, td, tdR, th, thR } from "../ui";
 import { changeLabel, money, pct } from "@/lib/format";
 import { regularStaffPayroll } from "@/lib/engine";
-import type { CalculationResult, CompensationPlan, Employee } from "@/lib/types";
+import type { CalculationResult, CompensationPlan, Employee, EmployeeResult } from "@/lib/types";
 
 /** Short explanation of where personal commission starts for threshold-based plans. */
 function commissionHint(plan: CompensationPlan, sales: number): string | null {
@@ -13,6 +13,14 @@ function commissionHint(plan: CompensationPlan, sales: number): string | null {
   if (sales < t) return `${money(t - sales)} below ${money(t)}`;
   if (sales === t) return "At threshold: commission starts on next sale";
   return `on ${money(sales - t)} above ${money(t)}`;
+}
+
+function commissionNote(e: EmployeeResult): string | null {
+  const parts: string[] = [];
+  if (e.commissionIsEstimate) parts.push("estimated mix");
+  if (e.commissionIsEstimate === false && e.personalCommission > 0) parts.push("from transactions");
+  if ((e.pendingDeliveryCommission ?? 0) > 0) parts.push(`${money(e.pendingDeliveryCommission!)} pending delivery`);
+  return parts.length ? parts.join(" · ") : null;
 }
 
 export function EmployeeResults({ result, plan }: { result: CalculationResult; plan: CompensationPlan }) {
@@ -57,6 +65,7 @@ export function EmployeeResults({ result, plan }: { result: CalculationResult; p
                   {commissionHint(plan, e.personalSales) && (
                     <div className="text-[11px] font-normal text-stone-500">{commissionHint(plan, e.personalSales)}</div>
                   )}
+                  {commissionNote(e) && <div className="text-[11px] font-normal text-stone-500 italic">{commissionNote(e)}</div>}
                 </td>
                 <td className={tdR}>{money(e.departmentCommission)}</td>
                 <td className={tdR}>{money(e.individualBonuses)}</td>
@@ -125,11 +134,15 @@ export function CurrentComparison({
   current,
   plan,
   employees,
+  variant,
+  variantName,
 }: {
   proposed: CalculationResult;
   current: CalculationResult;
   plan: CompensationPlan;
   employees: Employee[];
+  variant?: CalculationResult | null;
+  variantName?: string;
 }) {
   if (plan.locked) {
     return (
@@ -159,6 +172,7 @@ export function CurrentComparison({
               <th className={thR}>Proposed-plan pay</th>
               <th className={thR}>Dollar difference</th>
               <th className={thR}>% difference</th>
+              {variant && <th className={thR}>With first-sale commission</th>}
             </tr>
           </thead>
           <tbody>
@@ -170,7 +184,7 @@ export function CurrentComparison({
                     <td className={`${td} font-medium`}>
                       {e.name} <span className="text-xs font-normal">(manager)</span>
                     </td>
-                    <td className={`${td} text-center text-sm italic`} colSpan={4}>
+                    <td className={`${td} text-center text-sm italic`} colSpan={variant ? 5 : 4}>
                       Manager compensation is calculated separately and is not compared here.
                     </td>
                   </tr>
@@ -184,6 +198,7 @@ export function CurrentComparison({
                   <td className={tdR}>{money(e.total)}</td>
                   <td className={`${tdR} font-semibold`}>{changeLabel(d)}</td>
                   <td className={`${tdR} text-stone-600`}>{c.total > 0 ? `${d >= 0 ? "+" : "−"}${pct(Math.abs((d / c.total) * 100), 1)}` : "—"}</td>
+                  {variant && <td className={tdR}>{money(variant.employees[i].total)}</td>}
                 </tr>
               );
             })}
@@ -192,6 +207,13 @@ export function CurrentComparison({
         <div className="grid gap-3">
           <Stat label={`Current plan payroll${scope}`} value={money(curTotal)} sub={`${pct(proposed.storeGP ? (curTotal / proposed.storeGP) * 100 : 0, 1)} of gross profit`} />
           <Stat label={`${plan.name} payroll${scope}`} value={money(propTotal)} sub={`${pct(proposed.storeGP ? (propTotal / proposed.storeGP) * 100 : 0, 1)} of gross profit`} />
+          {variant && (
+            <Stat
+              label={`${variantName ?? "Variation"} payroll${scope}`}
+              value={money(excludeManagers ? regularStaffPayroll(variant, employees) : variant.totals.total)}
+              sub={`${changeLabel((excludeManagers ? regularStaffPayroll(variant, employees) : variant.totals.total) - propTotal)} vs the main plan`}
+            />
+          )}
           <Stat
             label="Change in company compensation expense"
             value={changeLabel(diff)}

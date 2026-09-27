@@ -33,6 +33,8 @@ export interface AppState {
   notes: string;
   activeScenarioId: string | null;
   activeScenarioName: string;
+  /** Compare threshold plans against a variation with a small commission from the first sale. */
+  firstSaleVariant: { enabled: boolean; ratePct: number };
 }
 
 export interface SavedScenario {
@@ -65,6 +67,7 @@ export function defaultState(): AppState {
     notes: "",
     activeScenarioId: null,
     activeScenarioName: "Working scenario",
+    firstSaleVariant: { enabled: false, ratePct: 0.5 },
   };
 }
 

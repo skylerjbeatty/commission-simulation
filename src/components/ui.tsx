@@ -116,7 +116,9 @@ export function NumField({
   inputClassName = "",
   ariaLabel,
   size = "md",
+  disabled,
 }: {
+  disabled?: boolean;
   value: number | null;
   onChange: (v: number | null) => void;
   prefix?: string;
@@ -154,6 +156,7 @@ export function NumField({
       <input
         aria-label={ariaLabel}
         inputMode="decimal"
+        disabled={disabled}
         className={`w-full min-w-0 bg-transparent px-2 tabular-nums outline-none disabled:text-stone-500 ${sizes[size]} ${inputClassName}`}
         value={shown}
         placeholder={placeholder}

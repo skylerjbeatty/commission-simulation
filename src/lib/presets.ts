@@ -274,6 +274,7 @@ export function buildPresets(): CompensationPlan[] {
       team: hybridTeam(),
     }),
     teamFirst50k(),
+    teamFirstIndividualGrowth(),
   ];
 }
 
@@ -315,6 +316,45 @@ function teamFirst50k(): CompensationPlan {
       distribution: "hours",
     },
   });
+}
+
+export const INDIVIDUAL_GROWTH_ID = "preset_team_first_individual_growth";
+
+function teamFirstIndividualGrowth(): CompensationPlan {
+  const base = teamFirst50k();
+  return {
+    ...base,
+    id: INDIVIDUAL_GROWTH_ID,
+    presetId: INDIVIDUAL_GROWTH_ID,
+    name: "TEAM FIRST, INDIVIDUAL GROWTH",
+    description:
+      "Every salesperson has a reason to help the whole store sell, and anyone who reaches their own $50,000 monthly goal earns more on every sale above it. $15/hour; a team pool of 1% of total store sales (manager's sales included) split among regular salespeople by hours and kept by everyone; $500 milestone bonuses at $50k, $75k and $100k; 1% appliances / 2% furniture and mattresses on sales above $50,000 only. The manager is paid separately.",
+    team: { ...base.team, payout: "quarterly" },
+    policyNotes: [
+      "Everyone keeps their team share, including after passing $50,000.",
+      "The team pool is earned monthly and paid quarterly.",
+      "Commission is based on booked sales and paid after delivery. Returns reverse the related commission.",
+      "SPIFs and protection plan pay are separate and not included here.",
+    ],
+  };
+}
+
+/**
+ * The "safer variation": the same plan plus a small personal commission from the first sale
+ * (applied to sales up to the threshold). Built on the fly for comparison; never saved over the plan.
+ */
+export function firstSaleVariant(plan: CompensationPlan, ratePct: number): CompensationPlan {
+  return {
+    ...plan,
+    id: `${plan.id}__first_sale`,
+    name: `${plan.name} + ${ratePct}% from first sale`,
+    locked: true,
+    commission: { ...plan.commission, baseRatePct: ratePct },
+  };
+}
+
+export function supportsFirstSaleVariant(plan: CompensationPlan): boolean {
+  return !plan.tracks.enabled && plan.commission.enabled && plan.commission.basis === "personalExcessByDepartment";
 }
 
 /** A blank plan for the Plan Builder. */

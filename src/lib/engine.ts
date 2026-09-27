@@ -11,6 +11,7 @@ import {
   type DepartmentSales,
   type Employee,
   type EmployeeResult,
+  type SaleTransaction,
   type StoreScenario,
 } from "./types";
 
@@ -124,19 +125,79 @@ export function commissionRuleFor(emp: Employee, plan: CompensationPlan): Commis
   return plan.tracks.enabled ? plan.tracks[emp.track].commission : plan.commission;
 }
 
+/** Transactions that count as sales (returns are removed and their commission reversed). */
+export function activeTransactions(emp: Employee): SaleTransaction[] {
+  return (emp.transactions ?? []).filter((t) => !t.returned && t.amount > 0);
+}
+
+export function usesTransactions(emp: Employee): boolean {
+  return !!emp.useTransactions && (emp.transactions?.length ?? 0) > 0;
+}
+
+/** Department totals from an employee's non-returned transactions. */
+export function salesFromTransactions(transactions: SaleTransaction[]): DepartmentSales {
+  const out = Object.fromEntries(DEPARTMENTS.map((d) => [d, 0])) as DepartmentSales;
+  for (const t of transactions) if (!t.returned && t.amount > 0) out[t.department] += t.amount;
+  return out;
+}
+
+export interface ExcessCommissionDetail {
+  /** Commission on sales up to the threshold (only when a first-sale rate is set). */
+  baseCommission: number;
+  /** Commission on sales above the threshold at department rates. */
+  excessCommission: number;
+  total: number;
+  /** Part of `total` on booked sales not yet delivered. */
+  pendingDelivery: number;
+  /** true when the above-threshold department mix was estimated proportionally. */
+  isEstimate: boolean;
+}
+
 /**
- * Commission on only the portion of personal sales above a threshold, at department rates.
- * The excess is allocated across departments in proportion to the person's department sales,
- * so nothing is paid retroactively on the first `excessThreshold` dollars.
+ * Commission on only the portion of personal sales above a threshold, at department rates,
+ * plus an optional small rate on sales up to the threshold.
+ *  - With transactions: walk sales in booking order; each sale's dollars past the threshold
+ *    earn its department's rate (a sale that crosses the threshold is split).
+ *  - Without transactions: the excess is allocated across departments in proportion to the
+ *    person's monthly department totals (an estimate).
+ * Nothing above-threshold is ever paid on the first `excessThreshold` dollars.
  */
-export function excessByDepartmentCommission(emp: Employee, rule: CommissionRule): number {
-  const excess = personalSales(emp) - (rule.excessThreshold ?? 0);
+export function excessCommissionDetail(emp: Employee, rule: CommissionRule): ExcessCommissionDetail {
+  const T = rule.excessThreshold ?? 0;
+  const rate = (d: Department) => (rule.departmentRatesPct?.[d] ?? 0) / 100;
+  const baseRate = (rule.baseRatePct ?? 0) / 100;
+
+  if (usesTransactions(emp)) {
+    let cum = 0;
+    let base = 0;
+    let excess = 0;
+    let pending = 0;
+    for (const t of activeTransactions(emp)) {
+      const before = cum;
+      cum += t.amount;
+      const belowPart = Math.max(0, Math.min(cum, T) - before);
+      const abovePart = Math.max(0, cum - Math.max(T, before));
+      const c = belowPart * baseRate + abovePart * rate(t.department);
+      base += belowPart * baseRate;
+      excess += abovePart * rate(t.department);
+      if (!t.delivered) pending += c;
+    }
+    return { baseCommission: base, excessCommission: excess, total: base + excess, pendingDelivery: pending, isEstimate: false };
+  }
+
+  const sales = personalSales(emp);
+  const base = Math.min(Math.max(0, sales), T) * baseRate;
+  const excessAmt = sales - T;
   const deptTotal = departmentTotal(emp.sales);
-  if (excess <= 0 || deptTotal <= 0) return 0;
-  return DEPARTMENTS.reduce(
-    (s, d) => s + (excess * (emp.sales[d] || 0) * (rule.departmentRatesPct?.[d] ?? 0)) / deptTotal / 100,
-    0,
-  );
+  const excess =
+    excessAmt > 0 && deptTotal > 0
+      ? DEPARTMENTS.reduce((s, d) => s + (excessAmt * (emp.sales[d] || 0) * rate(d)) / deptTotal, 0)
+      : 0;
+  return { baseCommission: base, excessCommission: excess, total: base + excess, pendingDelivery: 0, isEstimate: excessAmt > 0 };
+}
+
+export function excessByDepartmentCommission(emp: Employee, rule: CommissionRule): number {
+  return excessCommissionDetail(emp, rule).total;
 }
 
 function isStoreBasis(rule: CommissionRule) {
@@ -335,6 +396,8 @@ export function calculatePlan(
     }
     const ind = individualPay(emp, plan, scenario, ctx);
     const teamShare = pool * (weightById.get(emp.id) ?? 0);
+    const rule = commissionRuleFor(emp, plan);
+    const detail = rule.enabled && rule.basis === "personalExcessByDepartment" ? excessCommissionDetail(emp, rule) : null;
     const teamBonus = teamShare + ind.storeBonuses;
     const total = ind.basePay + ind.personalCommission + ind.departmentCommission + ind.individualBonuses + teamBonus;
     return {
@@ -350,6 +413,9 @@ export function calculatePlan(
       teamBonus: round2(teamBonus),
       total: round2(total),
       storeLinkedPay: round2(teamBonus + ind.storeLinkedCommission),
+      ...(detail
+        ? { commissionIsEstimate: detail.isEstimate, pendingDeliveryCommission: round2(detail.pendingDelivery) }
+        : {}),
     };
   });
 
