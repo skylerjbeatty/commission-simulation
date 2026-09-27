@@ -314,3 +314,43 @@ export const th = "border-b border-stone-200 px-2 py-2 text-left text-xs font-se
 export const thR = `${th} text-right`;
 export const td = "border-b border-stone-100 px-2 py-1.5 align-middle";
 export const tdR = `${td} text-right tabular-nums whitespace-nowrap`;
+
+/** Labeled range slider with the current value shown on the right. */
+export function Slider({
+  label,
+  value,
+  onChange,
+  min,
+  max,
+  step,
+  format,
+  disabled,
+}: {
+  label: ReactNode;
+  value: number;
+  onChange: (v: number) => void;
+  min: number;
+  max: number;
+  step: number;
+  format: (v: number) => string;
+  disabled?: boolean;
+}) {
+  return (
+    <label className={`block ${disabled ? "opacity-50" : ""}`}>
+      <span className="flex items-baseline justify-between gap-2 text-xs text-stone-600">
+        <span>{label}</span>
+        <span className="text-sm font-semibold text-stone-900 tabular-nums">{format(value)}</span>
+      </span>
+      <input
+        type="range"
+        className="mt-1 w-full"
+        min={min}
+        max={Math.max(max, value)}
+        step={step}
+        value={value}
+        disabled={disabled}
+        onChange={(e) => onChange(Number(e.target.value))}
+      />
+    </label>
+  );
+}

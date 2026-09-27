@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
 import { useApp } from "../AppContext";
 import { SectionHeading } from "../ui";
 import StoreControls from "../sim/StoreControls";
@@ -8,7 +8,8 @@ import ScenarioTesting from "../sim/ScenarioTesting";
 import TeamTable from "../sim/TeamTable";
 import { CompanyResults, CurrentComparison, EmployeeResults } from "../sim/Results";
 import { CliffDetector, IncentiveAnalysis, ProductionTable } from "../sim/PlanFeedback";
-import { CostCurve, EarningsCurve } from "../sim/Charts";
+import { CostCurve } from "../sim/Charts";
+import EarningsWorkbench from "../sim/EarningsWorkbench";
 import { BreakEvenContext, SensitivityTable, StaffingAnalysis } from "../sim/Insights";
 import { calculatePlan } from "@/lib/engine";
 import { detectCliffs, incentiveAnalysis, productionTable, sensitivityTable, staffingTable, type ReferenceOptions } from "@/lib/analysis";
@@ -35,19 +36,24 @@ export default function SimulatorTab({ onEditPlan }: { onEditPlan: () => void })
     [state.referenceTenure, employees, result.storeRevenue],
   );
 
-  const analysis = useMemo(() => incentiveAnalysis(plan, current, scenario, employees, opts), [plan, current, scenario, employees, opts]);
-  const cliffs = useMemo(() => detectCliffs(plan, scenario, opts), [plan, scenario, opts]);
-  const production = useMemo(() => productionTable(plan, current, scenario, opts), [plan, current, scenario, opts]);
+  // The heavier analysis sections follow deferred copies, so slider drags keep the curve and results responsive.
+  const dPlan = useDeferredValue(plan);
+  const dScenario = useDeferredValue(scenario);
+  const dEmployees = useDeferredValue(employees);
+  const dOpts = useDeferredValue(opts);
+  const analysis = useMemo(() => incentiveAnalysis(dPlan, current, dScenario, dEmployees, dOpts), [dPlan, current, dScenario, dEmployees, dOpts]);
+  const cliffs = useMemo(() => detectCliffs(dPlan, dScenario, dOpts), [dPlan, dScenario, dOpts]);
+  const production = useMemo(() => productionTable(dPlan, current, dScenario, dOpts), [dPlan, current, dScenario, dOpts]);
   const staffing = useMemo(
-    () => staffingTable(plan, scenario, result.storeRevenue, [3, 4, 5, 6, 7, 8], { tenureYears: opts.tenureYears, mix: opts.mix }),
-    [plan, scenario, result.storeRevenue, opts],
+    () => staffingTable(dPlan, dScenario, dOpts.storeRevenue ?? 0, [3, 4, 5, 6, 7, 8], { tenureYears: dOpts.tenureYears, mix: dOpts.mix }),
+    [dPlan, dScenario, dOpts],
   );
-  const sensitivity = useMemo(() => sensitivityTable(plan, scenario, employees), [plan, scenario, employees]);
+  const sensitivity = useMemo(() => sensitivityTable(dPlan, dScenario, dEmployees), [dPlan, dScenario, dEmployees]);
   const curvePlans = useMemo(
     () => [plan, ...extraCurvePlans.filter((id) => id !== plan.id).map(planById)],
     [plan, extraCurvePlans, planById],
   );
-  const costOpts = useMemo(() => ({ tenureYears: opts.tenureYears, mix: opts.mix }), [opts]);
+  const costOpts = useMemo(() => ({ tenureYears: dOpts.tenureYears, mix: dOpts.mix }), [dOpts]);
 
   return (
     <div className="space-y-5">
@@ -63,14 +69,15 @@ export default function SimulatorTab({ onEditPlan }: { onEditPlan: () => void })
       <CurrentComparison proposed={result} current={currentResult} plan={plan} />
 
       <SectionHeading note="Descriptive information for management discussion. The tool does not rank plans.">Plan Feedback</SectionHeading>
-      <IncentiveAnalysis sections={analysis} plan={plan} />
-      <CliffDetector cliffs={cliffs} plan={plan} />
-      <ProductionTable rows={production} plan={plan} tenure={state.referenceTenure} />
+      <IncentiveAnalysis sections={analysis} plan={dPlan} />
+      <CliffDetector cliffs={cliffs} plan={dPlan} />
+      <ProductionTable rows={production} plan={dPlan} tenure={dOpts.tenureYears ?? 0} />
 
       <SectionHeading>Charts</SectionHeading>
-      <EarningsCurve
+      <EarningsWorkbench
+        plan={plan}
         current={current}
-        plans={curvePlans}
+        extraPlans={curvePlans}
         scenario={scenario}
         opts={opts}
         extraControls={
@@ -96,12 +103,12 @@ export default function SimulatorTab({ onEditPlan }: { onEditPlan: () => void })
           </details>
         }
       />
-      <CostCurve plan={plan} current={current} scenario={scenario} opts={costOpts} />
+      <CostCurve plan={dPlan} current={current} scenario={dScenario} opts={costOpts} />
 
       <SectionHeading>Staffing, Break-Even &amp; Sensitivity</SectionHeading>
-      <StaffingAnalysis rows={staffing} revenue={result.storeRevenue} scenario={scenario} currentCount={employees.length} plan={plan} />
+      <StaffingAnalysis rows={staffing} revenue={dOpts.storeRevenue ?? 0} scenario={dScenario} currentCount={dEmployees.length} plan={dPlan} />
       <BreakEvenContext scenario={scenario} revenue={result.storeRevenue} />
-      <SensitivityTable cells={sensitivity} plan={plan} />
+      <SensitivityTable cells={sensitivity} plan={dPlan} />
     </div>
   );
 }

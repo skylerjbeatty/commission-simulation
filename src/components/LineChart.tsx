@@ -51,6 +51,7 @@ export function LineChart({
   yLabel,
   height = 320,
   yMin,
+  markerX,
 }: {
   series: Series[];
   xFormat: (v: number) => string;
@@ -59,6 +60,8 @@ export function LineChart({
   yLabel: string;
   height?: number;
   yMin?: number;
+  /** Optional x value to highlight with a solid vertical line and dots (e.g. a chosen sales level). */
+  markerX?: number;
 }) {
   const W = 820;
   const H = height;
@@ -160,6 +163,15 @@ export function LineChart({
               {s.name.length > 18 ? `${s.name.slice(0, 17)}…` : s.name}
             </text>
           ))}
+          {markerX !== undefined && markerX >= xMin && markerX <= xMax && (
+            <g>
+              <line x1={sx(markerX)} x2={sx(markerX)} y1={pad.t} y2={H - pad.b} stroke="#1c1917" strokeWidth="1.5" />
+              {series.map((s) => {
+                const p = valueAt(s.points, markerX);
+                return p ? <circle key={`m${s.id}`} cx={sx(markerX)} cy={sy(p.y)} r="5" fill={s.color} stroke="#fff" strokeWidth="2" /> : null;
+              })}
+            </g>
+          )}
           {hoverX !== null && (
             <g>
               <line x1={sx(hoverX)} x2={sx(hoverX)} y1={pad.t} y2={H - pad.b} stroke="#78716c" strokeDasharray="3 3" />
