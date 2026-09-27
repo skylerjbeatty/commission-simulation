@@ -1,36 +1,54 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Guion's Sales Compensation Simulator
 
-## Getting Started
+An internal decision-making sandbox for Guion's Showcase Furniture & Appliances. Change compensation variables and salesperson performance and immediately see what each person earns, what the plan costs, how it compares with the current plan, where commission cliffs are, and what behaviors the plan rewards.
 
-First, run the development server:
+The tool describes tradeoffs. It never ranks plans or recommends one.
+
+## Run locally
+
+Requires Node.js 20+.
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev        # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Other commands:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm test           # unit tests for the calculation engine (Vitest)
+npm run lint
+npm run build      # production build
+npm start          # serve the production build
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Deploy
 
-## Learn More
+It's a standard Next.js app with no database, environment variables or server code. You can import the repo into Vercel as-is.
 
-To learn more about Next.js, take a look at the following resources:
+## Where things are
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+| Path | What |
+|---|---|
+| `src/lib/types.ts` | Data model: `Employee`, `StoreScenario`, `CompensationPlan`, `CommissionTier`, `Bonus`, `TeamPlan`, `DepartmentPlan`, `CalculationResult` |
+| `src/lib/engine.ts` | The compensation math, as pure functions with no UI code |
+| `src/lib/analysis.ts` | Cliff detector, earnings and cost curves, sensitivity, staffing, incentive observations |
+| `src/lib/presets.ts` | The 10 built-in plans (CURRENT GUION'S PLAN is locked) |
+| `src/lib/defaults.ts` | Default store settings, sample team, revenue distribution |
+| `src/lib/annual.ts` | 12-month simulation |
+| `src/lib/__tests__/` | Unit tests, including every boundary from $29,999 to $100,000 |
+| `src/components/` | UI (tabs: Simulator, Compare Plans, Annual Simulation, Plan Builder) |
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Storage
 
-## Deploy on Vercel
+The working scenario and saved scenarios are stored in the browser's `localStorage`. They don't sync between computers or browsers.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Calculation conventions
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Rates and margins are entered as percents (2 = 2%).
+- A tier applies once the amount is **at or above** its threshold.
+- **Retroactive** tiers apply the achieved rate to all monthly sales. **Marginal** tiers apply each rate only to the dollars inside its bracket.
+- Personal gross profit = department sales × department margin. Blank department margins use the storewide margin.
+- Store gross profit = store revenue × storewide gross margin.
+- Bonuses stack. Bonuses triggered by store sales or store GP count as team pay.
+- Fixed-threshold team bonuses pay the amount for the highest threshold reached (they are not cumulative).
